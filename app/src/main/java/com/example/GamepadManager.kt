@@ -180,12 +180,25 @@ class GamepadManager(private val context: Context) {
 
     private fun registerApp() {
         if (hidDevice == null || isRegistered) return
-        val sdpSettings = BluetoothHidDeviceAppSdpSettings(
-            "Virtual Gamepad",
-            "Gamepad Provider",
-            BluetoothHidDevice.SUBCLASS2_GAMEPAD,
-            descriptor
-        )
+        val subclass = BluetoothHidDevice.SUBCLASS2_GAMEPAD
+        val sdpSettings = try {
+            BluetoothHidDeviceAppSdpSettings::class.java.getConstructor(
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                Byte::class.javaPrimitiveType,
+                ByteArray::class.java
+            ).newInstance(
+                "Virtual Gamepad",
+                "AI Studio",
+                "Gamepad Provider",
+                subclass,
+                descriptor
+            ) as BluetoothHidDeviceAppSdpSettings
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return
+        }
         hidDevice?.registerApp(sdpSettings, null, null, callbackExecutor, hidCallback)
     }
 
@@ -218,3 +231,4 @@ class GamepadManager(private val context: Context) {
         }
     }
 }
+// test
