@@ -44,6 +44,8 @@ fun GamepadScreen(
     var rightY by remember { mutableStateOf(0.toByte()) }
     var l2 by remember { mutableStateOf(0.toByte()) }
     var r2 by remember { mutableStateOf(0.toByte()) }
+    var connectionMessage by remember { mutableStateOf<String?>(null) }
+    val registrationState = gamepadManager?.registrationState?.collectAsState(initial = false)
 
     fun sendState() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
@@ -129,6 +131,16 @@ fun GamepadScreen(
                         
                         val pairedDevices = gamepadManager?.getPairedDevices() ?: emptyList()
                         
+                        if (registrationState?.value == false) {
+                            Text("Registering Gamepad Profile...", color = Color(0xFFFFA000), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        
+                        if (connectionMessage != null) {
+                            Text(connectionMessage!!, color = Color(0xFFFF5252), fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        
                         if (pairedDevices.isEmpty()) {
                             Text("No paired devices found.", color = Color.Gray, fontSize = 14.sp)
                         } else {
@@ -139,7 +151,18 @@ fun GamepadScreen(
                                 items(pairedDevices.size) { index ->
                                     val d = pairedDevices[index]
                                     Button(
-                                        onClick = { gamepadManager?.connectTo(d.device) },
+                                        onClick = { 
+                                            val result = gamepadManager?.connectTo(d.device)
+                                            if (result != null) {
+                                                result.onSuccess {
+                                                    connectionMessage = "Connecting to ${d.name}... Please wait."
+                                                }.onFailure {
+                                                    connectionMessage = it.message
+                                                }
+                                            } else {
+                                                connectionMessage = "Gamepad manager not initialized."
+                                            }
+                                        },
                                         modifier = Modifier.fillMaxWidth(),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF383534))
                                     ) {

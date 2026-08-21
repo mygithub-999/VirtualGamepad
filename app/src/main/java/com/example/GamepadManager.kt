@@ -34,6 +34,9 @@ class GamepadManager(private val context: Context) {
     private var hostDevice: BluetoothDevice? = null
 
     private var isRegistered = false
+    private val _registrationState = MutableStateFlow(false)
+    val registrationState: StateFlow<Boolean> = _registrationState
+
     private val _connectionState = MutableStateFlow(BluetoothProfile.STATE_DISCONNECTED)
     val connectionState: StateFlow<Int> = _connectionState
 
@@ -118,6 +121,7 @@ class GamepadManager(private val context: Context) {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             super.onAppStatusChanged(pluggedDevice, registered)
             isRegistered = registered
+            _registrationState.value = registered
             Log.d(TAG, "App status changed: registered=$registered")
         }
 
@@ -196,9 +200,22 @@ class GamepadManager(private val context: Context) {
         } ?: emptyList()
     }
 
-    fun connectTo(device: BluetoothDevice) {
-        if (!isRegistered) return
-        hidDevice?.connect(device)
+    fun connectTo(device: BluetoothDevice): Result<Unit> {
+        if (!isRegistered) return Result.failure(Exception("Gamepad profile not registered yet."))
+        return try {
+            val result = hidDevice?.connect(device)
+            if (result == true) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Connection initiation failed. This is often blocked by Android OS."))
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException: Outbound connect blocked", e)
+            Result.failure(Exception("Android blocks outbound Gamepad connections. You MUST connect from your TV/Laptop settings!"))
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception in connectTo", e)
+            Result.failure(e)
+        }
     }
 
     private var reportData = ByteArray(9)
