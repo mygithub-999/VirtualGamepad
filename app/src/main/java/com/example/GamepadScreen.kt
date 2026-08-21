@@ -93,101 +93,6 @@ fun GamepadScreen(
             }
         }
 
-        // Status and Connect Screen
-        if (!isConnected) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f))
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .background(Color(0xFF1E1C1B), RoundedCornerShape(16.dp))
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "Gamepad Not Connected",
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "To be detected correctly as a Gamepad, you MUST connect FROM this app TO your TV/Laptop.",
-                            color = Color.Gray,
-                            fontSize = 12.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Text("Select Paired Device:", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        val pairedDevices = gamepadManager?.getPairedDevices() ?: emptyList()
-                        
-                        if (registrationState?.value == false) {
-                            Text("Registering Gamepad Profile...", color = Color(0xFFFFA000), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        
-                        if (connectionMessage != null) {
-                            Text(connectionMessage!!, color = Color(0xFFFF5252), fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        
-                        if (pairedDevices.isEmpty()) {
-                            Text("No paired devices found.", color = Color.Gray, fontSize = 14.sp)
-                        } else {
-                            androidx.compose.foundation.lazy.LazyColumn(
-                                modifier = Modifier.heightIn(max = 160.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(pairedDevices.size) { index ->
-                                    val d = pairedDevices[index]
-                                    Button(
-                                        onClick = { 
-                                            val result = gamepadManager?.connectTo(d.device)
-                                            if (result != null) {
-                                                result.onSuccess {
-                                                    connectionMessage = "Connecting to ${d.name}... Please wait."
-                                                }.onFailure {
-                                                    connectionMessage = it.message
-                                                }
-                                            } else {
-                                                connectionMessage = "Gamepad manager not initialized."
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF383534))
-                                    ) {
-                                        Text(d.name, color = Color.White)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text("Step 1: Make sure the device is paired in Android Bluetooth Settings.", color = Color.Gray, fontSize = 12.sp)
-                        Text("Step 2: If not paired, make your phone discoverable below and pair it.", color = Color.Gray, fontSize = 12.sp)
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = onMakeDiscoverable,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2962FF))
-                        ) {
-                            Text("Make Phone Discoverable")
-                        }
-                    }
-                }
-            }
-        }
-
         // Center Menu Buttons
         Column(
             modifier = Modifier
@@ -321,6 +226,101 @@ fun GamepadScreen(
                     sendState()
                 }
             )
+        }
+
+        // Status and Connect Screen (Overlay MUST be drawn last to cover other elements)
+        if (!isConnected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.90f))
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .background(Color(0xFF1E1C1B), RoundedCornerShape(16.dp))
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "Gamepad Not Connected",
+                            color = Color.White,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "To be detected correctly as a Gamepad, you MUST connect FROM this app TO your TV/Laptop.",
+                            color = Color.Gray,
+                            fontSize = 12.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        Text("Select Paired Device:", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        val pairedDevices = gamepadManager?.getPairedDevices() ?: emptyList()
+                        
+                        if (registrationState?.value == false) {
+                            Text("Registering Gamepad Profile...", color = Color(0xFFFFA000), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        
+                        if (connectionMessage != null) {
+                            Text(connectionMessage!!, color = Color(0xFFFF5252), fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        
+                        if (pairedDevices.isEmpty()) {
+                            Text("No paired devices found.", color = Color.Gray, fontSize = 14.sp)
+                        } else {
+                            androidx.compose.foundation.lazy.LazyColumn(
+                                modifier = Modifier.heightIn(max = 160.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(pairedDevices.size) { index ->
+                                    val d = pairedDevices[index]
+                                    Button(
+                                        onClick = { 
+                                            val result = gamepadManager?.connectTo(d.device)
+                                            if (result != null) {
+                                                result.onSuccess {
+                                                    connectionMessage = "Connecting to ${d.name}... Please wait."
+                                                }.onFailure {
+                                                    connectionMessage = it.message
+                                                }
+                                            } else {
+                                                connectionMessage = "Gamepad manager not initialized."
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF383534))
+                                    ) {
+                                        Text(d.name, color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text("Step 1: Make sure the device is paired in Android Bluetooth Settings.", color = Color.Gray, fontSize = 12.sp)
+                        Text("Step 2: If not paired, make your phone discoverable below and pair it.", color = Color.Gray, fontSize = 12.sp)
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onMakeDiscoverable,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2962FF))
+                        ) {
+                            Text("Make Phone Discoverable")
+                        }
+                    }
+                }
+            }
         }
     }
 }
