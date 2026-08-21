@@ -1,5 +1,7 @@
 package com.example
 
+// GamepadManager handles the Bluetooth HID device connection and state.
+
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -21,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+
+data class PairedDevice(val name: String, val device: BluetoothDevice)
 
 @SuppressLint("MissingPermission")
 class GamepadManager(private val context: Context) {
@@ -175,26 +179,21 @@ class GamepadManager(private val context: Context) {
         if (hidDevice == null || isRegistered) return
 
         val subclass = BluetoothHidDevice.SUBCLASS2_GAMEPAD
-        val sdpSettings = try {
-            BluetoothHidDeviceAppSdpSettings::class.java.getConstructor(
-                String::class.java,
-                String::class.java,
-                String::class.java,
-                Byte::class.javaPrimitiveType,
-                ByteArray::class.java
-            ).newInstance(
-                "Virtual Gamepad",
-                "AI Studio",
-                "Gamepad Provider",
-                subclass,
-                descriptor
-            ) as BluetoothHidDeviceAppSdpSettings
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return
-        }
+        val sdpSettings = BluetoothHidDeviceAppSdpSettings(
+            "Virtual Gamepad",
+            "AI Studio",
+            "Gamepad Provider",
+            subclass,
+            descriptor
+        )
 
         hidDevice?.registerApp(sdpSettings, null, null, callbackExecutor, hidCallback)
+    }
+
+    fun getPairedDevices(): List<PairedDevice> {
+        return bluetoothAdapter?.bondedDevices?.map {
+            PairedDevice(it.name ?: it.address, it)
+        } ?: emptyList()
     }
 
     fun connectTo(device: BluetoothDevice) {
@@ -204,7 +203,6 @@ class GamepadManager(private val context: Context) {
 
     private var reportData = ByteArray(9)
 
-    // Input state updating
     fun updateState(buttons1: Byte, buttons2: Byte, hat: Byte, leftX: Byte, leftY: Byte, rightX: Byte, rightY: Byte, l2: Byte, r2: Byte) {
         reportData[0] = buttons1
         reportData[1] = buttons2
