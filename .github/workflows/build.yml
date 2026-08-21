@@ -24,7 +24,13 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.6' # Uses a specific Gradle version since the repository doesn't include a Gradle Wrapper
+        gradle-version: '9.3.1' # Updated to match Android Gradle Plugin 9.x requirements
+
+    - name: Generate debug keystore
+      run: |
+        if [ ! -f "debug.keystore" ]; then
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug"
+        fi
 
     - name: Build Debug APK
       run: gradle assembleDebug
