@@ -1,0 +1,5 @@
+{
+  "name": "Virtual Gamepad",
+  "description": "A highly responsive, low-latency virtual gamepad using Bluetooth HID.",
+  "requestFramePermissions": []
+}
