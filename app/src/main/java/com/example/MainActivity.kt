@@ -72,7 +72,13 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.padding(innerPadding)) {
                         GamepadScreen(
                             gamepadManager = gamepadManager,
-                            isConnected = isConnected
+                            isConnected = isConnected,
+                            onMakeDiscoverable = {
+                                val discoverableIntent = android.content.Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                                    putExtra(android.bluetooth.BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
+                                }
+                                startActivity(discoverableIntent)
+                            }
                         )
                     }
                 }
