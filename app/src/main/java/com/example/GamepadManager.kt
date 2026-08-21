@@ -5,7 +5,6 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
-import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -16,50 +15,41 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
-import androidx.annotation.RequiresApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
-@RequiresApi(Build.VERSION_CODES.P)
 @SuppressLint("MissingPermission")
 class GamepadManager(private val context: Context) {
     private val TAG = "GamepadManager"
-    private val bluetoothManager: BluetoothManager? = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-    private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+    private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var hidDevice: BluetoothHidDevice? = null
     private var hostDevice: BluetoothDevice? = null
-    
-    private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
-    private val callbackExecutor = Executors.newSingleThreadExecutor()
-    private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
-    private val _connectionState = MutableStateFlow(BluetoothProfile.STATE_DISCONNECTED)
-    val connectionState: StateFlow<Int> = _connectionState.asStateFlow()
-
-    // Single pre-allocated ByteArray for memory management (Flyweight pattern) to avoid GC pauses.
-    // 8 bytes:
-    // Byte 0: Buttons 1 (A, B, X, Y, L1, R1, L2, R2)
-    // Byte 1: Buttons 2 (Select, Start, L3, R3, D-pad...)
-    // Byte 2: Left Stick X
-    // Byte 3: Left Stick Y
-    // Byte 4: Right Stick X
-    // Byte 5: Right Stick Y
-    // Byte 6: L2 Analog
-    // Byte 7: R2 Analog
-    private val reportData = ByteArray(8)
     private var isRegistered = false
+    private val _connectionState = MutableStateFlow(BluetoothProfile.STATE_DISCONNECTED)
+    val connectionState: StateFlow<Int> = _connectionState
+
+    private val callbackExecutor = Executors.newSingleThreadExecutor()
+    private val coroutineScope = CoroutineScope(Dispatchers.Main)
+
+    private val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+        vibratorManager.defaultVibrator
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    }
 
     private val descriptor = byteArrayOf(
         0x05.toByte(), 0x01.toByte(), // Usage Page (Generic Desktop)
         0x09.toByte(), 0x05.toByte(), // Usage (Gamepad)
         0xA1.toByte(), 0x01.toByte(), // Collection (Application)
         0x85.toByte(), 0x01.toByte(), //   Report ID (1)
+        
         // Buttons
         0x05.toByte(), 0x09.toByte(), //   Usage Page (Button)
         0x19.toByte(), 0x01.toByte(), //   Usage Minimum (1)
@@ -69,6 +59,24 @@ class GamepadManager(private val context: Context) {
         0x75.toByte(), 0x01.toByte(), //   Report Size (1)
         0x95.toByte(), 0x10.toByte(), //   Report Count (16)
         0x81.toByte(), 0x02.toByte(), //   Input (Data, Variable, Absolute)
+        
+        // Hat Switch
+        0x05.toByte(), 0x01.toByte(), //   Usage Page (Generic Desktop)
+        0x09.toByte(), 0x39.toByte(), //   Usage (Hat switch)
+        0x15.toByte(), 0x00.toByte(), //   Logical Minimum (0)
+        0x25.toByte(), 0x07.toByte(), //   Logical Maximum (7)
+        0x35.toByte(), 0x00.toByte(), //   Physical Minimum (0)
+        0x46.toByte(), 0x3B.toByte(), 0x01.toByte(), // Physical Maximum (315)
+        0x65.toByte(), 0x14.toByte(), //   Unit (Eng Rot:Angular Pos)
+        0x75.toByte(), 0x04.toByte(), //   Report Size (4)
+        0x95.toByte(), 0x01.toByte(), //   Report Count (1)
+        0x81.toByte(), 0x42.toByte(), //   Input (Data, Variable, Absolute, Null State)
+        
+        // Padding for Hat Switch
+        0x75.toByte(), 0x04.toByte(), //   Report Size (4)
+        0x95.toByte(), 0x01.toByte(), //   Report Count (1)
+        0x81.toByte(), 0x03.toByte(), //   Input (Constant)
+        
         // Sticks (Left X, Y, Right X, Y)
         0x05.toByte(), 0x01.toByte(), //   Usage Page (Generic Desktop)
         0x09.toByte(), 0x30.toByte(), //   Usage (X)
@@ -80,6 +88,7 @@ class GamepadManager(private val context: Context) {
         0x75.toByte(), 0x08.toByte(), //   Report Size (8)
         0x95.toByte(), 0x04.toByte(), //   Report Count (4)
         0x81.toByte(), 0x02.toByte(), //   Input (Data, Variable, Absolute)
+        
         // L2/R2 Analog
         0x05.toByte(), 0x01.toByte(), //   Usage Page (Generic Desktop)
         0x09.toByte(), 0x33.toByte(), //   Usage (Rx - L2)
@@ -89,6 +98,7 @@ class GamepadManager(private val context: Context) {
         0x75.toByte(), 0x08.toByte(), //   Report Size (8)
         0x95.toByte(), 0x02.toByte(), //   Report Count (2)
         0x81.toByte(), 0x02.toByte(), //   Input (Data, Variable, Absolute)
+
         // Haptics/Output
         0x85.toByte(), 0x02.toByte(), //   Report ID (2)
         0x09.toByte(), 0x01.toByte(), //   Usage (Vendor specific for Rumble)
@@ -116,16 +126,15 @@ class GamepadManager(private val context: Context) {
 
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
             super.onSetReport(device, type, id, data)
-            // Reverse Data Flow: Haptics & Rumble
             if (id.toInt() == 2 && data.size >= 2) {
                 val strongMotor = data[0].toInt() and 0xFF
                 val weakMotor = data[1].toInt() and 0xFF
+                
                 if (strongMotor > 0 || weakMotor > 0) {
                     val effect = VibrationEffect.createOneShot(100, (strongMotor.coerceAtLeast(weakMotor) * 255 / 255))
                     vibrator?.vibrate(effect)
                 }
             }
-            // Acknowledge report
             hidDevice?.reportError(device, BluetoothHidDevice.ERROR_RSP_SUCCESS)
         }
     }
@@ -137,6 +146,7 @@ class GamepadManager(private val context: Context) {
                 registerApp()
             }
         }
+
         override fun onServiceDisconnected(profile: Int) {
             if (profile == BluetoothProfile.HID_DEVICE) {
                 hidDevice = null
@@ -150,36 +160,20 @@ class GamepadManager(private val context: Context) {
             if (intent?.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
                 val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                 if (state == BluetoothAdapter.STATE_OFF) {
-                    Log.d(TAG, "Bluetooth turned off, updating state")
                     _connectionState.value = BluetoothProfile.STATE_DISCONNECTED
-                    // Fallback to IP Control would be triggered here in UI
                 }
             }
         }
     }
 
-    fun start() {
+    init {
         bluetoothAdapter?.getProfileProxy(context, profileListener, BluetoothProfile.HID_DEVICE)
-        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
-        }
-    }
-
-    fun stop() {
-        hidDevice?.let {
-            if (isRegistered) {
-                it.unregisterApp()
-            }
-            bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it)
-        }
-        context.unregisterReceiver(receiver)
+        context.registerReceiver(receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
     }
 
     private fun registerApp() {
         if (hidDevice == null || isRegistered) return
+
         val subclass = BluetoothHidDevice.SUBCLASS2_GAMEPAD
         val sdpSettings = try {
             BluetoothHidDeviceAppSdpSettings::class.java.getConstructor(
@@ -199,6 +193,7 @@ class GamepadManager(private val context: Context) {
             e.printStackTrace()
             return
         }
+
         hidDevice?.registerApp(sdpSettings, null, null, callbackExecutor, hidCallback)
     }
 
@@ -207,21 +202,24 @@ class GamepadManager(private val context: Context) {
         hidDevice?.connect(device)
     }
 
+    private var reportData = ByteArray(9)
+
     // Input state updating
-    fun updateState(buttons1: Byte, buttons2: Byte, leftX: Byte, leftY: Byte, rightX: Byte, rightY: Byte, l2: Byte, r2: Byte) {
+    fun updateState(buttons1: Byte, buttons2: Byte, hat: Byte, leftX: Byte, leftY: Byte, rightX: Byte, rightY: Byte, l2: Byte, r2: Byte) {
         reportData[0] = buttons1
         reportData[1] = buttons2
-        reportData[2] = leftX
-        reportData[3] = leftY
-        reportData[4] = rightX
-        reportData[5] = rightY
-        reportData[6] = l2
-        reportData[7] = r2
+        reportData[2] = hat
+        reportData[3] = leftX
+        reportData[4] = leftY
+        reportData[5] = rightX
+        reportData[6] = rightY
+        reportData[7] = l2
+        reportData[8] = r2
         sendReport()
     }
 
     fun resetState() {
-        updateState(0, 0, 0, 0, 0, 0, 0, 0)
+        updateState(0, 0, 8, 0, 0, 0, 0, 0, 0)
     }
 
     private fun sendReport() {
@@ -231,4 +229,3 @@ class GamepadManager(private val context: Context) {
         }
     }
 }
-// test
